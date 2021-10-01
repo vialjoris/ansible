@@ -1,0 +1,65 @@
+- hosts: all
+  tasks:
+    - name: check openssl version 
+      shell: "{{ item }}"
+      register: opensslversion
+      with_items:
+        - "openssl version"
+      changed_when: "'1.0.2g' in opensslversion.stdout"       
+
+    - name: Create a directory /data/scripts/openssl
+      ansible.builtin.file:
+        path: "/data/scripts/openssl"
+        state: directory
+        mode: '0775'
+      when: opensslversion.changed        
+    
+    - name: get openssl 1.1.0
+      get_url:
+        url: https://www.openssl.org/source/old/1.1.0/openssl-1.1.0g.tar.gz
+        dest: /data/scripts/openssl/openssl-1.1.0g.tar.gz      
+      when: opensslversion.changed
+
+    - name: extract openssl-1.1.0g.tar.gz
+      become: yes
+      ansible.builtin.unarchive:
+        src: /data/scripts/openssl/openssl-1.1.0g.tar.gz
+        dest: /data/scripts/openssl
+        mode: 0775
+        remote_src: yes
+      when: opensslversion.changed
+
+    - name: configure openssl
+      become: yes
+      command: chdir=/data/scripts/openssl/openssl-1.1.0g/ ./config
+      when: opensslversion.changed
+
+    - name: make openssl
+      become: yes
+      command: chdir=/data/scripts/openssl/openssl-1.1.0g/ make
+      when: opensslversion.changed
+
+    - name: make install openssl
+      become: yes
+      command: chdir=/data/scripts/openssl/openssl-1.1.0g/ sudo make install
+      when: opensslversion.changed
+      
+    - name: add library openssl
+      become: yes
+      command: chdir=/data/scripts/openssl/openssl-1.1.0g/ sudo ldconfig
+      when: opensslversion.changed
+    
+    - name: Move /usr/bin/openssl to /usr/bin/openssl-1.0.2g
+      become: yes
+      command: mv /usr/bin/openssl /usr/bin/openssl-1.0.2g
+      when: opensslversion.changed
+    
+    - name: Create a symbolic link /usr/bin/openssl
+      become: yes
+      ansible.builtin.file:
+        src: /usr/local/bin/openssl
+        dest: /usr/bin/openssl
+        state: link
+      when: opensslversion.changed
+
+
